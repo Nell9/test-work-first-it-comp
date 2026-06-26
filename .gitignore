@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+
+# Виртуальное окружение
+.venv/
+venv/
+env/
+
+# База данных SQLite (создаётся локально командой migrate)
+db.sqlite3
+db.sqlite3-journal
+
+# Логи
+*.log
+
+# IDE и прочие локальные настройки
+.idea/
+.vscode/
+.claude/
+
+# macOS
+.DS_Store
+
+# Статика, собранная collectstatic
+/staticfiles/
