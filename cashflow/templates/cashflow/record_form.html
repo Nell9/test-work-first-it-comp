@@ -1,0 +1,232 @@
+{% extends "cashflow/base.html" %}
+
+{% block title %}Запись ДДС{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <h1 class="h3 mb-4" id="formTitle">Новая запись</h1>
+
+    <div id="formError" class="alert alert-danger d-none"></div>
+
+    <form id="recordForm" novalidate>
+      <div class="mb-3">
+        <label class="form-label">Дата</label>
+        <input type="date" name="date" class="form-control">
+        <div class="field-error" data-error="date"></div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Статус</label>
+        <select name="status" class="form-select">
+          <option value="">— не выбран —</option>
+        </select>
+        <div class="field-error" data-error="status"></div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Тип <span class="text-danger">*</span></label>
+        <select name="type" class="form-select" required></select>
+        <div class="field-error" data-error="type"></div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Категория <span class="text-danger">*</span></label>
+        <select name="category" class="form-select" required disabled></select>
+        <div class="form-text">Сначала выберите тип.</div>
+        <div class="field-error" data-error="category"></div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">
+          Подкатегория <span class="text-danger">*</span>
+        </label>
+        <select name="subcategory" class="form-select" required disabled></select>
+        <div class="form-text">Зависит от выбранной категории.</div>
+        <div class="field-error" data-error="subcategory"></div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Сумма, р. <span class="text-danger">*</span></label>
+        <input type="number" name="amount" class="form-control" step="0.01"
+               min="0.01" required>
+        <div class="field-error" data-error="amount"></div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Комментарий</label>
+        <textarea name="comment" class="form-control" rows="3"></textarea>
+        <div class="field-error" data-error="comment"></div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <a href="{% url 'record_list' %}" class="btn btn-outline-secondary">Отмена</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Если pk есть в URL — мы в режиме редактирования.
+  const recordId = "{{ view.kwargs.pk|default:'' }}";
+  const form = document.getElementById("recordForm");
+
+  function fillSelect(select, items, labelFn, keepPlaceholder) {
+    const placeholder = keepPlaceholder ? select.querySelector("option") : null;
+    select.innerHTML = "";
+    if (placeholder) select.appendChild(placeholder);
+    for (const item of items) {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = labelFn(item);
+      select.appendChild(option);
+    }
+  }
+
+  // Подгружаем категории выбранного типа (бизнес-правило: категория зависит от типа).
+  async function loadCategories(typeId, selectedId) {
+    const select = form.category;
+    if (!typeId) {
+      select.innerHTML = "";
+      select.disabled = true;
+      loadSubcategories(null);
+      return;
+    }
+    const categories = await API.get(`/api/categories/?type=${typeId}`);
+    select.innerHTML = `<option value="">— выберите категорию —</option>`;
+    fillSelect(select, categories, (c) => c.name, true);
+    select.disabled = false;
+    if (selectedId) select.value = selectedId;
+  }
+
+  // Подгружаем подкатегории выбранной категории.
+  async function loadSubcategories(categoryId, selectedId) {
+    const select = form.subcategory;
+    if (!categoryId) {
+      select.innerHTML = "";
+      select.disabled = true;
+      return;
+    }
+    const subcategories = await API.get(`/api/subcategories/?category=${categoryId}`);
+    select.innerHTML = `<option value="">— выберите подкатегорию —</option>`;
+    fillSelect(select, subcategories, (s) => s.name, true);
+    select.disabled = false;
+    if (selectedId) select.value = selectedId;
+  }
+
+  form.type.addEventListener("change", () => {
+    // Сменили тип — заодно сбрасываем подкатегорию, чтобы не осталось
+    // значение от прошлой категории.
+    loadCategories(form.type.value);
+    loadSubcategories(null);
+  });
+  form.category.addEventListener("change", () =>
+    loadSubcategories(form.category.value));
+
+  function clearErrors() {
+    document.getElementById("formError").classList.add("d-none");
+    document.querySelectorAll("[data-error]").forEach((el) => (el.textContent = ""));
+  }
+
+  function showFieldError(field, message) {
+    const el = document.querySelector(`[data-error="${field}"]`);
+    if (el) el.textContent = message;
+  }
+
+  // Клиентская валидация обязательных полей (дублирует серверную).
+  function validate(data) {
+    let ok = true;
+    if (!data.type) { showFieldError("type", "Выберите тип."); ok = false; }
+    if (!data.category) {
+      showFieldError("category", "Выберите категорию."); ok = false;
+    }
+    if (!data.subcategory) {
+      showFieldError("subcategory", "Выберите подкатегорию."); ok = false;
+    }
+    if (!data.amount) {
+      showFieldError("amount", "Укажите сумму."); ok = false;
+    } else if (Number(data.amount) <= 0) {
+      showFieldError("amount", "Сумма должна быть больше нуля."); ok = false;
+    }
+    return ok;
+  }
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    clearErrors();
+
+    const data = {
+      date: form.date.value || null,
+      status: form.status.value || null,
+      type: form.type.value || null,
+      category: form.category.value || null,
+      subcategory: form.subcategory.value || null,
+      amount: form.amount.value,
+      comment: form.comment.value,
+    };
+
+    if (!validate(data)) return;
+
+    try {
+      if (recordId) {
+        await API.put(`/api/records/${recordId}/`, data);
+      } else {
+        await API.post("/api/records/", data);
+      }
+      window.location.href = "{% url 'record_list' %}";
+    } catch (error) {
+      // Раскладываем серверные ошибки по полям, общее — в баннер сверху.
+      if (error.data && typeof error.data === "object") {
+        let hadField = false;
+        for (const [field, messages] of Object.entries(error.data)) {
+          const text = Array.isArray(messages) ? messages.join(" ") : messages;
+          if (document.querySelector(`[data-error="${field}"]`)) {
+            showFieldError(field, text);
+            hadField = true;
+          }
+        }
+        if (!hadField) {
+          const banner = document.getElementById("formError");
+          banner.textContent = formatApiError(error);
+          banner.classList.remove("d-none");
+        }
+      } else {
+        const banner = document.getElementById("formError");
+        banner.textContent = formatApiError(error);
+        banner.classList.remove("d-none");
+      }
+    }
+  });
+
+  // Первичная инициализация формы.
+  async function init() {
+    const [statuses, types] = await Promise.all([
+      API.get("/api/statuses/"),
+      API.get("/api/types/"),
+    ]);
+    fillSelect(form.status, statuses, (s) => s.name, true);
+    form.type.innerHTML = `<option value="">— выберите тип —</option>`;
+    fillSelect(form.type, types, (t) => t.name, true);
+
+    if (recordId) {
+      document.getElementById("formTitle").textContent = "Редактирование записи";
+      const record = await API.get(`/api/records/${recordId}/`);
+      form.date.value = record.date;
+      form.status.value = record.status || "";
+      form.type.value = record.type;
+      await loadCategories(record.type, record.category);
+      await loadSubcategories(record.category, record.subcategory);
+      form.amount.value = record.amount;
+      form.comment.value = record.comment || "";
+    } else {
+      // Новая запись: дата по умолчанию — сегодня (можно поменять руками).
+      form.date.value = new Date().toISOString().slice(0, 10);
+    }
+  }
+
+  init();
+</script>
+{% endblock %}

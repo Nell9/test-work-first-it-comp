@@ -1,0 +1,285 @@
+{% extends "cashflow/base.html" %}
+
+{% block title %}Справочники{% endblock %}
+
+{% block content %}
+<h1 class="h3 mb-4">Управление справочниками</h1>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="tab"
+            data-bs-target="#tab-status">Статусы</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab"
+            data-bs-target="#tab-type">Типы</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab"
+            data-bs-target="#tab-category">Категории</button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab"
+            data-bs-target="#tab-subcategory">Подкатегории</button>
+  </li>
+</ul>
+
+<div class="tab-content">
+  <!-- Статусы -->
+  <div class="tab-pane fade show active" id="tab-status">
+    <form class="row g-2 align-items-end mb-3" data-form="status">
+      <input type="hidden" name="id">
+      <div class="col-sm-6">
+        <label class="form-label">Название</label>
+        <input type="text" name="name" class="form-control" required>
+      </div>
+      <div class="col-sm-6 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <button type="button" class="btn btn-outline-secondary d-none"
+                data-cancel>Отмена</button>
+      </div>
+    </form>
+    <div class="alert alert-danger d-none" data-error="status"></div>
+    <table class="table table-sm table-striped">
+      <thead><tr><th>Название</th><th class="text-end">Действия</th></tr></thead>
+      <tbody data-list="status"></tbody>
+    </table>
+  </div>
+
+  <!-- Типы -->
+  <div class="tab-pane fade" id="tab-type">
+    <form class="row g-2 align-items-end mb-3" data-form="type">
+      <input type="hidden" name="id">
+      <div class="col-sm-6">
+        <label class="form-label">Название</label>
+        <input type="text" name="name" class="form-control" required>
+      </div>
+      <div class="col-sm-6 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <button type="button" class="btn btn-outline-secondary d-none"
+                data-cancel>Отмена</button>
+      </div>
+    </form>
+    <div class="alert alert-danger d-none" data-error="type"></div>
+    <table class="table table-sm table-striped">
+      <thead><tr><th>Название</th><th class="text-end">Действия</th></tr></thead>
+      <tbody data-list="type"></tbody>
+    </table>
+  </div>
+
+  <!-- Категории -->
+  <div class="tab-pane fade" id="tab-category">
+    <form class="row g-2 align-items-end mb-3" data-form="category">
+      <input type="hidden" name="id">
+      <div class="col-sm-5">
+        <label class="form-label">Название</label>
+        <input type="text" name="name" class="form-control" required>
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label">Тип</label>
+        <select name="type" class="form-select" required></select>
+      </div>
+      <div class="col-sm-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <button type="button" class="btn btn-outline-secondary d-none"
+                data-cancel>Отмена</button>
+      </div>
+    </form>
+    <div class="alert alert-danger d-none" data-error="category"></div>
+    <table class="table table-sm table-striped">
+      <thead>
+        <tr><th>Название</th><th>Тип</th><th class="text-end">Действия</th></tr>
+      </thead>
+      <tbody data-list="category"></tbody>
+    </table>
+  </div>
+
+  <!-- Подкатегории -->
+  <div class="tab-pane fade" id="tab-subcategory">
+    <form class="row g-2 align-items-end mb-3" data-form="subcategory">
+      <input type="hidden" name="id">
+      <div class="col-sm-5">
+        <label class="form-label">Название</label>
+        <input type="text" name="name" class="form-control" required>
+      </div>
+      <div class="col-sm-4">
+        <label class="form-label">Категория</label>
+        <select name="category" class="form-select" required></select>
+      </div>
+      <div class="col-sm-3 d-flex gap-2">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <button type="button" class="btn btn-outline-secondary d-none"
+                data-cancel>Отмена</button>
+      </div>
+    </form>
+    <div class="alert alert-danger d-none" data-error="subcategory"></div>
+    <table class="table table-sm table-striped">
+      <thead>
+        <tr><th>Название</th><th>Категория</th><th class="text-end">Действия</th></tr>
+      </thead>
+      <tbody data-list="subcategory"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Описание четырёх справочников в одном месте, чтобы не плодить копипасту.
+  const ENTITIES = {
+    status: {
+      api: "/api/statuses/",
+      columns: [(item) => escapeHtml(item.name)],
+    },
+    type: {
+      api: "/api/types/",
+      columns: [(item) => escapeHtml(item.name)],
+    },
+    category: {
+      api: "/api/categories/",
+      columns: [
+        (item) => escapeHtml(item.name),
+        (item) => escapeHtml(item.type_name),
+      ],
+    },
+    subcategory: {
+      api: "/api/subcategories/",
+      columns: [
+        (item) => escapeHtml(item.name),
+        (item) => escapeHtml(item.category_name),
+      ],
+    },
+  };
+
+  // Кэш загруженных данных — нужен для выпадающих списков (тип, категория).
+  const cache = {};
+
+  async function loadAll() {
+    const [statuses, types, categories, subcategories] = await Promise.all([
+      API.get(ENTITIES.status.api),
+      API.get(ENTITIES.type.api),
+      API.get(ENTITIES.category.api),
+      API.get(ENTITIES.subcategory.api),
+    ]);
+    cache.status = statuses;
+    cache.type = types;
+    cache.category = categories;
+    cache.subcategory = subcategories;
+
+    renderList("status", statuses);
+    renderList("type", types);
+    renderList("category", categories);
+    renderList("subcategory", subcategories);
+
+    // Списки-зависимости: тип для категории, категория для подкатегории.
+    fillOptions("category", "type", types, (t) => t.name);
+    fillOptions("subcategory", "category", categories,
+      (c) => `${c.name} (${c.type_name})`);
+  }
+
+  function fillOptions(formKey, fieldName, items, labelFn) {
+    const select = document.querySelector(`[data-form="${formKey}"] [name="${fieldName}"]`);
+    const current = select.value;
+    select.innerHTML = `<option value="">— выберите —</option>`;
+    for (const item of items) {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = labelFn(item);
+      select.appendChild(option);
+    }
+    select.value = current;
+  }
+
+  function renderList(key, items) {
+    const tbody = document.querySelector(`[data-list="${key}"]`);
+    const columns = ENTITIES[key].columns;
+    if (!items.length) {
+      const span = columns.length + 1;
+      tbody.innerHTML =
+        `<tr><td colspan="${span}" class="text-muted">Пусто</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = items.map((item) => {
+      const cells = columns.map((fn) => `<td>${fn(item)}</td>`).join("");
+      return `<tr>${cells}
+        <td class="text-end text-nowrap">
+          <button class="btn btn-sm btn-outline-secondary"
+                  onclick="startEdit('${key}', ${item.id})">Изменить</button>
+          <button class="btn btn-sm btn-outline-danger"
+                  onclick="removeItem('${key}', ${item.id})">Удалить</button>
+        </td></tr>`;
+    }).join("");
+  }
+
+  function startEdit(key, id) {
+    const item = cache[key].find((row) => row.id === id);
+    const form = document.querySelector(`[data-form="${key}"]`);
+    form.id.value = item.id;
+    form.name.value = item.name;
+    if (key === "category") form.type.value = item.type;
+    if (key === "subcategory") form.category.value = item.category;
+    form.querySelector("[data-cancel]").classList.remove("d-none");
+    form.name.focus();
+  }
+
+  function resetForm(form) {
+    form.reset();
+    form.id.value = "";
+    form.querySelector("[data-cancel]").classList.add("d-none");
+    hideError(form.dataset.form);
+  }
+
+  function showError(key, message) {
+    const box = document.querySelector(`[data-error="${key}"]`);
+    box.textContent = message;
+    box.classList.remove("d-none");
+  }
+
+  function hideError(key) {
+    document.querySelector(`[data-error="${key}"]`).classList.add("d-none");
+  }
+
+  async function submitForm(form) {
+    const key = form.dataset.form;
+    hideError(key);
+    const payload = { name: form.name.value.trim() };
+    if (key === "category") payload.type = form.type.value || null;
+    if (key === "subcategory") payload.category = form.category.value || null;
+
+    const id = form.id.value;
+    try {
+      if (id) {
+        await API.put(`${ENTITIES[key].api}${id}/`, payload);
+      } else {
+        await API.post(ENTITIES[key].api, payload);
+      }
+      resetForm(form);
+      await loadAll();
+    } catch (error) {
+      showError(key, formatApiError(error));
+    }
+  }
+
+  async function removeItem(key, id) {
+    if (!confirm("Удалить элемент справочника?")) return;
+    try {
+      await API.del(`${ENTITIES[key].api}${id}/`);
+      await loadAll();
+    } catch (error) {
+      showError(key, formatApiError(error));
+    }
+  }
+
+  // Навешиваем обработчики на все четыре формы.
+  document.querySelectorAll("[data-form]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      submitForm(form);
+    });
+    form.querySelector("[data-cancel]").addEventListener("click", () =>
+      resetForm(form));
+  });
+
+  loadAll();
+</script>
+{% endblock %}

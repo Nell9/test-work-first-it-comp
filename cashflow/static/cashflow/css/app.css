@@ -1,0 +1,31 @@
+/* Совсем немного стилей поверх Bootstrap. */
+
+body {
+  background-color: #f6f7f9;
+}
+
+.navbar-brand {
+  font-weight: 600;
+}
+
+.table-records td,
+.table-records th {
+  vertical-align: middle;
+}
+
+.comment-cell {
+  max-width: 280px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.amount-cell {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.field-error {
+  color: #dc3545;
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}

@@ -1,0 +1,179 @@
+{% extends "cashflow/base.html" %}
+
+{% block title %}Записи ДДС{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h3 mb-0">Записи о движении денежных средств</h1>
+  <a href="{% url 'record_create' %}" class="btn btn-primary">Создать запись</a>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <form id="filters" class="row g-3">
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">Дата с</label>
+        <input type="date" name="date_from" class="form-control">
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">Дата по</label>
+        <input type="date" name="date_to" class="form-control">
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">Статус</label>
+        <select name="status" class="form-select"></select>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">Тип</label>
+        <select name="type" class="form-select"></select>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">Категория</label>
+        <select name="category" class="form-select"></select>
+      </div>
+      <div class="col-sm-6 col-md-3">
+        <label class="form-label">Подкатегория</label>
+        <select name="subcategory" class="form-select"></select>
+      </div>
+      <div class="col-12 d-flex gap-2">
+        <button type="submit" class="btn btn-outline-primary">Применить</button>
+        <button type="button" id="resetFilters" class="btn btn-outline-secondary">
+          Сбросить
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="table-responsive">
+  <table class="table table-striped table-records align-middle">
+    <thead>
+      <tr>
+        <th>Дата</th>
+        <th>Статус</th>
+        <th>Тип</th>
+        <th>Категория</th>
+        <th>Подкатегория</th>
+        <th class="text-end">Сумма, р.</th>
+        <th>Комментарий</th>
+        <th class="text-end">Действия</th>
+      </tr>
+    </thead>
+    <tbody id="recordsBody">
+      <tr><td colspan="8" class="text-center text-muted">Загрузка…</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Форматирование даты ISO (2025-01-01) -> 01.01.2025, как в ТЗ.
+  function formatDate(iso) {
+    if (!iso) return "";
+    const [y, m, d] = iso.split("-");
+    return `${d}.${m}.${y}`;
+  }
+
+  function formatAmount(value) {
+    return Number(value).toLocaleString("ru-RU", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
+  // Наполняем select справочником.
+  function fillSelect(select, items, labelFn, placeholder) {
+    select.innerHTML = `<option value="">${placeholder}</option>`;
+    for (const item of items) {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = labelFn(item);
+      select.appendChild(option);
+    }
+  }
+
+  async function loadFilterOptions() {
+    const [statuses, types, categories, subcategories] = await Promise.all([
+      API.get("/api/statuses/"),
+      API.get("/api/types/"),
+      API.get("/api/categories/"),
+      API.get("/api/subcategories/"),
+    ]);
+    const form = document.getElementById("filters");
+    fillSelect(form.status, statuses, (s) => s.name, "Все");
+    fillSelect(form.type, types, (t) => t.name, "Все");
+    // У категорий и подкатегорий имена могут повторяться, поэтому уточняем
+    // их принадлежность в скобках.
+    fillSelect(form.category, categories,
+      (c) => `${c.name} (${c.type_name})`, "Все");
+    fillSelect(form.subcategory, subcategories,
+      (s) => `${s.name} (${s.category_name})`, "Все");
+  }
+
+  async function loadRecords() {
+    const form = document.getElementById("filters");
+    const params = new URLSearchParams();
+    for (const field of ["date_from", "date_to", "status", "type",
+                         "category", "subcategory"]) {
+      const value = form[field].value;
+      if (value) params.append(field, value);
+    }
+    const body = document.getElementById("recordsBody");
+    try {
+      const records = await API.get("/api/records/?" + params.toString());
+      if (!records.length) {
+        body.innerHTML =
+          `<tr><td colspan="8" class="text-center text-muted">Записей нет</td></tr>`;
+        return;
+      }
+      body.innerHTML = records.map(renderRow).join("");
+    } catch (error) {
+      body.innerHTML =
+        `<tr><td colspan="8" class="text-center text-danger">Ошибка загрузки</td></tr>`;
+    }
+  }
+
+  function renderRow(record) {
+    return `
+      <tr>
+        <td>${formatDate(record.date)}</td>
+        <td>${escapeHtml(record.status_name) || "—"}</td>
+        <td>${escapeHtml(record.type_name)}</td>
+        <td>${escapeHtml(record.category_name)}</td>
+        <td>${escapeHtml(record.subcategory_name)}</td>
+        <td class="text-end amount-cell">${formatAmount(record.amount)}</td>
+        <td class="comment-cell">${escapeHtml(record.comment)}</td>
+        <td class="text-end text-nowrap">
+          <a href="/records/${record.id}/edit/"
+             class="btn btn-sm btn-outline-secondary">Изменить</a>
+          <button class="btn btn-sm btn-outline-danger"
+                  onclick="deleteRecord(${record.id})">Удалить</button>
+        </td>
+      </tr>`;
+  }
+
+  async function deleteRecord(id) {
+    if (!confirm("Удалить запись?")) return;
+    try {
+      await API.del(`/api/records/${id}/`);
+      loadRecords();
+    } catch (error) {
+      alert(formatApiError(error));
+    }
+  }
+
+  document.getElementById("filters").addEventListener("submit", (event) => {
+    event.preventDefault();
+    loadRecords();
+  });
+
+  document.getElementById("resetFilters").addEventListener("click", () => {
+    document.getElementById("filters").reset();
+    loadRecords();
+  });
+
+  // Стартовая загрузка.
+  loadFilterOptions().then(loadRecords);
+</script>
+{% endblock %}
